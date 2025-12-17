@@ -89,16 +89,43 @@ func run(profile string, batchSize int, execPath string, downloadDir string) err
 		log.Printf("✓ Downloads will be saved to: %s", downloadDir)
 	}
 
-	// 2. Check login
-	var url string
-	if err := chromedp.Run(ctx, chromedp.Location(&url)); err != nil {
-		log.Printf("Warning: could not get current URL: %v", err)
+	// 2. Check login status
+	isLoggedIn, err := checkLoginStatus(ctx)
+	if err != nil {
+		log.Printf("Warning: could not check login status: %v", err)
 	}
-	if strings.Contains(url, "passport") || strings.Contains(url, "auth") {
-		log.Println("⚠️  Please login in the browser!")
-		log.Println("Waiting 60 seconds...")
-		time.Sleep(60 * time.Second)
 
+	if !isLoggedIn {
+		log.Println("⚠️  User is NOT logged in!")
+		log.Println("⚠️  Please log in to your Yandex account in the browser window.")
+		log.Println("Waiting for login (checking every 10 seconds, max 5 minutes)...")
+
+		// Wait for user to login with periodic checks
+		loginTimeout := time.After(5 * time.Minute)
+		loginCheck := time.NewTicker(10 * time.Second)
+		defer loginCheck.Stop()
+
+		loginSuccess := false
+		for !loginSuccess {
+			select {
+			case <-loginTimeout:
+				return fmt.Errorf("login timeout: user did not log in within 5 minutes")
+			case <-loginCheck.C:
+				isLoggedIn, err = checkLoginStatus(ctx)
+				if err != nil {
+					log.Printf("Warning: login check failed: %v", err)
+					continue
+				}
+				if isLoggedIn {
+					loginSuccess = true
+					log.Println("✓ Login detected!")
+				} else {
+					log.Println("Still waiting for login...")
+				}
+			}
+		}
+
+		// Navigate to photos after successful login
 		if err := chromedp.Run(ctx,
 			chromedp.Navigate("https://disk.yandex.com/client/photo"),
 			chromedp.Sleep(5*time.Second),
@@ -107,7 +134,7 @@ func run(profile string, batchSize int, execPath string, downloadDir string) err
 		}
 	}
 
-	log.Println("✓ Page loaded")
+	log.Println("✓ User is logged in")
 
 	// 3. Main loop - process one date at a time
 	// Strategy: always process the FIRST visible date and scroll after each download
@@ -508,4 +535,115 @@ func scrollDown(ctx context.Context) error {
 		return fmt.Errorf("scroll down failed: %w", err)
 	}
 	return nil
+}
+
+// checkLoginStatus verifies if the user is logged into Yandex
+// Returns true if logged in, false if on login page
+func checkLoginStatus(ctx context.Context) (bool, error) {
+	// First check URL
+	var url string
+	if err := chromedp.Run(ctx, chromedp.Location(&url)); err != nil {
+		return false, fmt.Errorf("could not get current URL: %w", err)
+	}
+
+	// If URL contains passport or auth, definitely not logged in
+	if strings.Contains(url, "passport") || strings.Contains(url, "auth") {
+		log.Printf("Login page detected (URL: %s)", url)
+		return false, nil
+	}
+
+	// Check for login page elements in the DOM
+	var isLoginPage bool
+	err := chromedp.Run(ctx,
+		chromedp.Evaluate(`
+			(function() {
+				// Check for Yandex ID login page elements
+				const pageText = document.body?.innerText || '';
+				const pageHTML = document.body?.innerHTML || '';
+				
+				// Login page indicators
+				const loginIndicators = [
+					// Text content checks
+					pageText.includes('Log in with Yandex ID'),
+					pageText.includes('Войти с Яндекс ID'),
+					pageText.includes('Yandex ID'),
+					pageText.includes('Username or email'),
+					pageText.includes('Логин или email'),
+					pageText.includes('Create ID'),
+					pageText.includes('Создать ID'),
+					pageText.includes('Face or fingerprint login'),
+					
+					// Element checks
+					!!document.querySelector('input[name="login"]'),
+					!!document.querySelector('input[placeholder*="Username"]'),
+					!!document.querySelector('input[placeholder*="email"]'),
+					!!document.querySelector('button[data-t="button:pseudo"]'),
+					!!document.querySelector('[class*="AuthLoginInputToggle"]'),
+					!!document.querySelector('[class*="Passport"]'),
+					!!document.querySelector('[data-t="login"]'),
+					
+					// Login form check
+					!!document.querySelector('form[action*="passport"]'),
+					!!document.querySelector('form[action*="auth"]'),
+				];
+				
+				// If any login indicator is found, user is on login page
+				return loginIndicators.some(indicator => indicator === true);
+			})()
+		`, &isLoginPage),
+	)
+
+	if err != nil {
+		return false, fmt.Errorf("could not check login elements: %w", err)
+	}
+
+	if isLoginPage {
+		log.Println("Login page elements detected in DOM")
+		return false, nil
+	}
+
+	// Additional check: verify Yandex Disk elements are present (indicates logged in)
+	var hasDiskElements bool
+	err = chromedp.Run(ctx,
+		chromedp.Evaluate(`
+			(function() {
+				// Check for Yandex Disk logged-in elements
+				const diskIndicators = [
+					// Photo section elements
+					!!document.querySelector('[class*="photo"]'),
+					!!document.querySelector('[class*="Photo"]'),
+					!!document.querySelector('[class*="listing"]'),
+					!!document.querySelector('[class*="Listing"]'),
+					
+					// User avatar or account elements
+					!!document.querySelector('[class*="user"]'),
+					!!document.querySelector('[class*="User"]'),
+					!!document.querySelector('[class*="avatar"]'),
+					!!document.querySelector('[class*="Avatar"]'),
+					
+					// Disk navigation elements
+					!!document.querySelector('[class*="sidebar"]'),
+					!!document.querySelector('[class*="Sidebar"]'),
+					!!document.querySelector('[href*="/client/"]'),
+				];
+				
+				return diskIndicators.filter(i => i === true).length >= 2;
+			})()
+		`, &hasDiskElements),
+	)
+
+	if err != nil {
+		log.Printf("Warning: could not verify disk elements: %v", err)
+		// If we can't verify but URL looks OK, assume logged in
+		return true, nil
+	}
+
+	if hasDiskElements {
+		log.Println("✓ Yandex Disk elements detected - user is logged in")
+		return true, nil
+	}
+
+	// If no disk elements found but also no login elements, wait a bit and recheck
+	log.Println("⚠️ Could not confirm login status, page may still be loading...")
+	return false, nil
 }
