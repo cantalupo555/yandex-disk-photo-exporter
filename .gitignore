@@ -1,0 +1,16 @@
+# Binary
+yandex-disk-photo-exporter
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Debug
+*.log
+debug/
