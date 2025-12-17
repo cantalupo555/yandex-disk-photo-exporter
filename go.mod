@@ -1,4 +1,4 @@
-module yandex-disk-photo-exporter
+module github.com/cantalupo555/yandex-disk-photo-exporter
 
 go 1.25.5
 
