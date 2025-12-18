@@ -17,7 +17,7 @@ env:
 
 jobs:
   # ===========================================================================
-  # Linux Builds
+  # Linux Builds (native builds with .deb and .rpm packages)
   # ===========================================================================
   build-linux:
     strategy:
@@ -44,7 +44,7 @@ jobs:
       - name: Build binary
         run: |
           mkdir -p bin
-          go build -ldflags="-X main.appVersion=${{ steps.version.outputs.VERSION }}" \
+          go build -ldflags="-s -w -X main.appVersion=${{ steps.version.outputs.VERSION }}" \
             -o bin/yandex-disk-photo-exporter_${{ steps.version.outputs.VERSION }}_linux_${{ matrix.arch }} \
             .
 
@@ -53,7 +53,7 @@ jobs:
 
       - name: Create nfpm config
         run: |
-          cat > nfpm-${{ matrix.arch }}.yaml <<EOF
+          cat > nfpm.yaml <<EOF
           name: yandex-disk-photo-exporter
           arch: ${{ matrix.arch }}
           platform: linux
@@ -78,12 +78,12 @@ jobs:
 
       - name: Build .deb package
         run: |
-          nfpm package -p deb -f nfpm-${{ matrix.arch }}.yaml
+          nfpm package -p deb -f nfpm.yaml
           mv *.deb bin/yandex-disk-photo-exporter_${{ steps.version.outputs.VERSION }}_linux_${{ matrix.arch }}.deb
 
       - name: Build .rpm package
         run: |
-          nfpm package -p rpm -f nfpm-${{ matrix.arch }}.yaml
+          nfpm package -p rpm -f nfpm.yaml
           mv *.rpm bin/yandex-disk-photo-exporter_${{ steps.version.outputs.VERSION }}_linux_${{ matrix.arch }}.rpm
 
       - name: Upload artifacts
@@ -93,7 +93,7 @@ jobs:
           path: bin/*
 
   # ===========================================================================
-  # Windows Build
+  # Windows Build (cross-compile from Linux)
   # ===========================================================================
   build-windows:
     runs-on: ubuntu-latest
@@ -117,7 +117,7 @@ jobs:
           GOARCH: amd64
         run: |
           mkdir -p bin
-          go build -ldflags="-X main.appVersion=${{ steps.version.outputs.VERSION }}" \
+          go build -ldflags="-s -w -X main.appVersion=${{ steps.version.outputs.VERSION }}" \
             -o bin/yandex-disk-photo-exporter_${{ steps.version.outputs.VERSION }}_windows_amd64.exe \
             .
 
@@ -128,7 +128,7 @@ jobs:
           path: bin/*
 
   # ===========================================================================
-  # macOS Builds
+  # macOS Builds (cross-compile both architectures from Linux)
   # ===========================================================================
   build-macos:
     runs-on: ubuntu-latest
@@ -155,7 +155,7 @@ jobs:
           GOARCH: arm64
         run: |
           mkdir -p bin
-          go build -ldflags="-X main.appVersion=${{ steps.version.outputs.VERSION }}" \
+          go build -ldflags="-s -w -X main.appVersion=${{ steps.version.outputs.VERSION }}" \
             -o yandex-disk-photo-exporter \
             .
           zip bin/yandex-disk-photo-exporter_${{ steps.version.outputs.VERSION }}_macOS_arm64.zip yandex-disk-photo-exporter
@@ -167,7 +167,7 @@ jobs:
           GOOS: darwin
           GOARCH: amd64
         run: |
-          go build -ldflags="-X main.appVersion=${{ steps.version.outputs.VERSION }}" \
+          go build -ldflags="-s -w -X main.appVersion=${{ steps.version.outputs.VERSION }}" \
             -o yandex-disk-photo-exporter \
             .
           zip bin/yandex-disk-photo-exporter_${{ steps.version.outputs.VERSION }}_macOS_amd64.zip yandex-disk-photo-exporter
