@@ -31,12 +31,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error getting home directory: %v", err)
 	}
-	defaultProfile := filepath.Join(homeDir, "snap/chromium/common/chromium")
+
+	// OS-aware defaults
+	defaultProfile := browser.DefaultProfilePath()
 	defaultDownload := filepath.Join(homeDir, "Downloads")
 
-	profile := flag.String("profile", defaultProfile, "Path to Chromium profile")
+	profile := flag.String("profile", defaultProfile, "Path to browser profile")
 	batchSize := flag.Int("batch", 10, "Number of dates per batch")
-	execPath := flag.String("exec", "chromium", "Browser executable")
+	execPath := flag.String("exec", "", "Browser executable (auto-detect if empty)")
 	downloadDir := flag.String("download", defaultDownload, "Directory to save downloads")
 	flag.Parse()
 
@@ -44,6 +46,16 @@ func main() {
 	if *showVersion {
 		fmt.Printf("yandex-disk-photo-exporter version %s\n", appVersion)
 		os.Exit(0)
+	}
+
+	// Auto-detect browser if not specified
+	browserExec := *execPath
+	if browserExec == "" {
+		browserExec = browser.DetectBrowser()
+		if browserExec == "" {
+			log.Fatal("Error: Could not find Chrome/Chromium. Please install Chrome or specify path with -exec flag")
+		}
+		log.Printf("✓ Auto-detected browser: %s", browserExec)
 	}
 
 	// Expand ~ in download path
@@ -58,12 +70,12 @@ func main() {
 	}
 
 	log.Println("=== Yandex Photo Downloader ===")
-	log.Printf("Executable: %s", *execPath)
+	log.Printf("Executable: %s", browserExec)
 	log.Printf("Profile: %s", *profile)
 	log.Printf("Download: %s", downloadPath)
 	log.Printf("Batch: %d dates at a time", *batchSize)
 
-	if err := run(*profile, *batchSize, *execPath, downloadPath); err != nil {
+	if err := run(*profile, *batchSize, browserExec, downloadPath); err != nil {
 		log.Fatalf("Error: %v", err)
 	}
 }
