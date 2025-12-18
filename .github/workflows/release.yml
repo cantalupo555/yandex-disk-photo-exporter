@@ -1,6 +1,6 @@
 # GitHub Actions Release Pipeline for yandex-disk-photo-exporter
 # Triggered on version tags (v*)
-# Builds binaries for Linux (amd64/arm64), Windows (amd64), and macOS (amd64/arm64)
+# Builds binaries for Linux (amd64/arm64), Windows (amd64/arm64), and macOS (amd64/arm64)
 
 name: Release
 
@@ -16,6 +16,120 @@ env:
   GO_VERSION: '1.25'
 
 jobs:
+  # ===========================================================================
+  # Generate Changelog from Conventional Commits
+  # ===========================================================================
+  changelog:
+    runs-on: ubuntu-latest
+    outputs:
+      changelog: ${{ steps.changelog.outputs.changelog }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for changelog generation
+
+      - name: Generate changelog
+        id: changelog
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          # Get current and previous tags
+          CURRENT_TAG="${GITHUB_REF#refs/tags/}"
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 "${CURRENT_TAG}^" 2>/dev/null || echo "")
+          
+          echo "Current tag: $CURRENT_TAG"
+          echo "Previous tag: $PREVIOUS_TAG"
+          
+          # Get commits between tags
+          if [ -n "$PREVIOUS_TAG" ]; then
+            COMMITS=$(git log "${PREVIOUS_TAG}..${CURRENT_TAG}" --pretty=format:"%H|%s|%an" --reverse 2>/dev/null || echo "")
+            COMPARE_URL="**Full Changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${PREVIOUS_TAG}...${CURRENT_TAG}"
+          else
+            COMMITS=$(git log "${CURRENT_TAG}" --pretty=format:"%H|%s|%an" --reverse 2>/dev/null || echo "")
+            COMPARE_URL=""
+          fi
+          
+          # Initialize category strings
+          FEATURES=""
+          FIXES=""
+          PERFORMANCE=""
+          OTHER=""
+          
+          # Parse commits and categorize
+          while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            
+            HASH=$(echo "$line" | cut -d'|' -f1)
+            MESSAGE=$(echo "$line" | cut -d'|' -f2)
+            AUTHOR=$(echo "$line" | cut -d'|' -f3)
+            
+            SHORT_HASH="${HASH:0:7}"
+            
+            # Extract PR number if present
+            PR_NUM=""
+            if [[ "$MESSAGE" =~ \(#([0-9]+)\) ]]; then
+              PR_NUM="${BASH_REMATCH[1]}"
+            fi
+            
+            # Format the entry
+            if [ -n "$PR_NUM" ]; then
+              CLEAN_MSG=$(echo "$MESSAGE" | sed 's/ *(#[0-9]*)$//')
+              ENTRY="* [\`${SHORT_HASH}\`](https://github.com/${GITHUB_REPOSITORY}/commit/${HASH}) : ${CLEAN_MSG} ([#${PR_NUM}](https://github.com/${GITHUB_REPOSITORY}/pull/${PR_NUM})) (@${AUTHOR})"
+            else
+              ENTRY="* [\`${SHORT_HASH}\`](https://github.com/${GITHUB_REPOSITORY}/commit/${HASH}) : ${MESSAGE} (@${AUTHOR})"
+            fi
+            
+            # Categorize by conventional commit prefix
+            case "$MESSAGE" in
+              feat:*|feat\(*) 
+                FEATURES="${FEATURES}${ENTRY}"$'\n'
+                ;;
+              fix:*|fix\(*) 
+                FIXES="${FIXES}${ENTRY}"$'\n'
+                ;;
+              perf:*|perf\(*) 
+                PERFORMANCE="${PERFORMANCE}${ENTRY}"$'\n'
+                ;;
+              docs:*|docs\(*|chore:*|chore\(*|build:*|build\(*|ci:*|ci\(*|refactor:*|refactor\(*|test:*|test\(*|style:*|style\(*)
+                OTHER="${OTHER}${ENTRY}"$'\n'
+                ;;
+              *)
+                OTHER="${OTHER}${ENTRY}"$'\n'
+                ;;
+            esac
+          done <<< "$COMMITS"
+          
+          # Build changelog
+          CHANGELOG="## Changelog"$'\n\n'
+          
+          if [ -n "$FEATURES" ]; then
+            CHANGELOG="${CHANGELOG}### New Features"$'\n\n'"${FEATURES}"$'\n'
+          fi
+          
+          if [ -n "$PERFORMANCE" ]; then
+            CHANGELOG="${CHANGELOG}### Performance Improvements"$'\n\n'"${PERFORMANCE}"$'\n'
+          fi
+          
+          if [ -n "$FIXES" ]; then
+            CHANGELOG="${CHANGELOG}### Bug Fixes"$'\n\n'"${FIXES}"$'\n'
+          fi
+          
+          if [ -n "$OTHER" ]; then
+            CHANGELOG="${CHANGELOG}### Other work"$'\n\n'"${OTHER}"$'\n'
+          fi
+          
+          if [ -n "$COMPARE_URL" ]; then
+            CHANGELOG="${CHANGELOG}${COMPARE_URL}"
+          fi
+          
+          # Output changelog using heredoc for multiline
+          {
+            echo 'changelog<<EOF'
+            echo "$CHANGELOG"
+            echo 'EOF'
+          } >> $GITHUB_OUTPUT
+
   # ===========================================================================
   # Linux Builds (native builds with .deb and .rpm packages)
   # ===========================================================================
@@ -185,10 +299,10 @@ jobs:
           path: bin/*
 
   # ===========================================================================
-  # Create GitHub Release
+  # Create GitHub Release with Custom Changelog
   # ===========================================================================
   release:
-    needs: [build-linux, build-windows, build-macos]
+    needs: [changelog, build-linux, build-windows, build-macos]
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
@@ -204,6 +318,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: bin/*
-          generate_release_notes: true
+          body: ${{ needs.changelog.outputs.changelog }}
           draft: false
           prerelease: ${{ contains(github.ref, '-alpha') || contains(github.ref, '-beta') || contains(github.ref, '-rc') }}
