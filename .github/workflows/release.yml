@@ -54,7 +54,12 @@ jobs:
           FEATURES=""
           FIXES=""
           PERFORMANCE=""
-          OTHER=""
+          DOCS=""
+          REFACTOR=""
+          TESTS=""
+          BUILD_CI=""
+          MAINTENANCE=""
+          OTHERS=""
           
           # Parse commits and categorize
           while IFS= read -r line; do
@@ -91,11 +96,23 @@ jobs:
               perf:*|perf\(*) 
                 PERFORMANCE="${PERFORMANCE}${ENTRY}"$'\n'
                 ;;
-              docs:*|docs\(*|chore:*|chore\(*|build:*|build\(*|ci:*|ci\(*|refactor:*|refactor\(*|test:*|test\(*|style:*|style\(*)
-                OTHER="${OTHER}${ENTRY}"$'\n'
+              docs:*|docs\(*) 
+                DOCS="${DOCS}${ENTRY}"$'\n'
+                ;;
+              refactor:*|refactor\(*) 
+                REFACTOR="${REFACTOR}${ENTRY}"$'\n'
+                ;;
+              test:*|test\(*) 
+                TESTS="${TESTS}${ENTRY}"$'\n'
+                ;;
+              build:*|build\(*|ci:*|ci\(*) 
+                BUILD_CI="${BUILD_CI}${ENTRY}"$'\n'
+                ;;
+              chore:*|chore\(*|style:*|style\(*) 
+                MAINTENANCE="${MAINTENANCE}${ENTRY}"$'\n'
                 ;;
               *)
-                OTHER="${OTHER}${ENTRY}"$'\n'
+                OTHERS="${OTHERS}${ENTRY}"$'\n'
                 ;;
             esac
           done <<< "$COMMITS"
@@ -104,19 +121,39 @@ jobs:
           CHANGELOG="## Changelog"$'\n\n'
           
           if [ -n "$FEATURES" ]; then
-            CHANGELOG="${CHANGELOG}### New Features"$'\n\n'"${FEATURES}"$'\n'
-          fi
-          
-          if [ -n "$PERFORMANCE" ]; then
-            CHANGELOG="${CHANGELOG}### Performance Improvements"$'\n\n'"${PERFORMANCE}"$'\n'
+            CHANGELOG="${CHANGELOG}### 🚀 New Features"$'\n\n'"${FEATURES}"$'\n'
           fi
           
           if [ -n "$FIXES" ]; then
-            CHANGELOG="${CHANGELOG}### Bug Fixes"$'\n\n'"${FIXES}"$'\n'
+            CHANGELOG="${CHANGELOG}### 🐛 Bug Fixes"$'\n\n'"${FIXES}"$'\n'
           fi
           
-          if [ -n "$OTHER" ]; then
-            CHANGELOG="${CHANGELOG}### Other work"$'\n\n'"${OTHER}"$'\n'
+          if [ -n "$PERFORMANCE" ]; then
+            CHANGELOG="${CHANGELOG}### ⚡ Performance Improvements"$'\n\n'"${PERFORMANCE}"$'\n'
+          fi
+          
+          if [ -n "$DOCS" ]; then
+            CHANGELOG="${CHANGELOG}### 📚 Documentation"$'\n\n'"${DOCS}"$'\n'
+          fi
+          
+          if [ -n "$REFACTOR" ]; then
+            CHANGELOG="${CHANGELOG}### ♻️ Code Refactoring"$'\n\n'"${REFACTOR}"$'\n'
+          fi
+          
+          if [ -n "$TESTS" ]; then
+            CHANGELOG="${CHANGELOG}### 🧪 Tests"$'\n\n'"${TESTS}"$'\n'
+          fi
+          
+          if [ -n "$BUILD_CI" ]; then
+            CHANGELOG="${CHANGELOG}### 🔧 CI/CD"$'\n\n'"${BUILD_CI}"$'\n'
+          fi
+          
+          if [ -n "$MAINTENANCE" ]; then
+            CHANGELOG="${CHANGELOG}### 🧹 Maintenance"$'\n\n'"${MAINTENANCE}"$'\n'
+          fi
+          
+          if [ -n "$OTHERS" ]; then
+            CHANGELOG="${CHANGELOG}### 📦 Other work"$'\n\n'"${OTHERS}"$'\n'
           fi
           
           if [ -n "$COMPARE_URL" ]; then
