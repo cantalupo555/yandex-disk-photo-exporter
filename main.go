@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -15,11 +16,17 @@ import (
 	"github.com/cantalupo555/yandex-disk-photo-exporter/internal/selection"
 )
 
+// appVersion is set at build time via -ldflags="-X main.appVersion=x.x.x"
+var appVersion = "dev"
+
 const (
 	yandexPhotosURL = "https://disk.yandex.com/client/photo"
 )
 
 func main() {
+	// Version flag
+	showVersion := flag.Bool("version", false, "Show version and exit")
+
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		log.Fatalf("Error getting home directory: %v", err)
@@ -32,6 +39,12 @@ func main() {
 	execPath := flag.String("exec", "chromium", "Browser executable")
 	downloadDir := flag.String("download", defaultDownload, "Directory to save downloads")
 	flag.Parse()
+
+	// Handle version flag
+	if *showVersion {
+		fmt.Printf("yandex-disk-photo-exporter version %s\n", appVersion)
+		os.Exit(0)
+	}
 
 	// Expand ~ in download path
 	downloadPath := *downloadDir
