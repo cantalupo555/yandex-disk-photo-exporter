@@ -16,7 +16,59 @@ A Go-based automation tool to bulk download photos from Yandex Disk, organized b
 - **Chromium-based browser** (Chrome, Chromium, Edge, Vivaldi, Opera, or Brave)
 - Logged into your Yandex account in the browser
 
-> **Note:** Go 1.25+ is only required if building from source. Pre-built binaries are available in the [Releases](https://github.com/cantalupo555/yandex-disk-photo-exporter/releases) page.
+## Installation
+
+### Option 1: Download (Recommended)
+
+Download the latest release for your platform from the [Releases](https://github.com/cantalupo555/yandex-disk-photo-exporter/releases) page.
+
+| Platform | Architecture | File |
+|----------|--------------|------|
+| **Linux** | x64 (Intel/AMD) | `.deb`, `.rpm`, or binary |
+| **Linux** | ARM64 | `.deb`, `.rpm`, or binary |
+| **Windows** | x64 (Intel/AMD) | `.exe` |
+| **Windows** | ARM64 | `.exe` |
+| **macOS** | Intel | `.zip` |
+| **macOS** | Apple Silicon (M1/M2/M3) | `.zip` |
+
+#### Linux (Debian/Ubuntu)
+```bash
+# Download and install .deb package
+sudo dpkg -i yandex-disk-photo-exporter_*_linux_amd64.deb
+```
+
+#### Linux (Fedora/RHEL)
+```bash
+# Download and install .rpm package
+sudo rpm -i yandex-disk-photo-exporter_*_linux_amd64.rpm
+```
+
+#### Windows
+1. Download the `.exe` file
+2. Run directly or add to PATH
+
+#### macOS
+```bash
+# Extract and run
+unzip yandex-disk-photo-exporter_*_macOS_arm64.zip
+./yandex-disk-photo-exporter
+```
+
+### Option 2: Build from Source
+
+Requires **Go 1.25+** installed.
+
+```bash
+# Clone the repository
+git clone https://github.com/cantalupo555/yandex-disk-photo-exporter.git
+cd yandex-disk-photo-exporter
+
+# Install dependencies
+go mod download
+
+# Build the binary
+go build -o yandex-disk-photo-exporter
+```
 
 ## Browser Compatibility
 
@@ -57,21 +109,6 @@ If you have multiple browsers or want to use a specific one:
 ```
 
 > **Note:** Any Chromium-based browser should work. If your browser isn't auto-detected, use the `-exec` flag with the full path.
-
-
-## Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/cantalupo555/yandex-disk-photo-exporter.git
-cd yandex-disk-photo-exporter
-
-# Install dependencies
-go mod download
-
-# Build the binary
-go build -o yandex-disk-photo-exporter
-```
 
 ## Usage
 
