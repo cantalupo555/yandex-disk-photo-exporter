@@ -138,8 +138,16 @@ func run(profile string, batchSize int, execPath string, downloadDir string) err
 	// 4. Main loop - process one date at a time
 	totalProcessed := 0
 	emptyRounds := 0
+	consecutiveErrors := 0
+	const maxConsecutiveErrors = 3
 
 	for {
+		// Check if browser/context is still valid
+		if browser.IsContextCanceled(ctx) {
+			log.Println("\n⚠️ Browser was closed. Exiting gracefully...")
+			break
+		}
+
 		log.Printf("\n--- Processing date %d ---", totalProcessed+1)
 
 		// Check for pending selection and clear it
@@ -148,14 +156,33 @@ func run(profile string, batchSize int, execPath string, downloadDir string) err
 		// Select the FIRST visible date (always the top one)
 		dateInfo, err := selection.SelectFirstVisibleDate(ctx)
 		if err != nil {
+			// Check if this is a fatal error (browser closed)
+			if browser.IsBrowserClosed(err) {
+				log.Println("\n⚠️ Browser was closed. Exiting gracefully...")
+				break
+			}
 			log.Printf("Error selecting: %v", err)
+			consecutiveErrors++
+			if consecutiveErrors >= maxConsecutiveErrors {
+				log.Printf("⚠️ Too many consecutive errors (%d). Browser may be unresponsive.", consecutiveErrors)
+				// Double-check if context is still valid
+				if browser.IsContextCanceled(ctx) {
+					log.Println("Browser context is no longer valid. Exiting...")
+					break
+				}
+			}
 			time.Sleep(1 * time.Second)
 			continue
 		}
+		consecutiveErrors = 0 // Reset on success
 
 		if dateInfo == nil {
 			log.Println("No date found, scrolling...")
 			if err := navigation.ScrollDown(ctx); err != nil {
+				if browser.IsBrowserClosed(err) {
+					log.Println("\n⚠️ Browser was closed. Exiting gracefully...")
+					break
+				}
 				log.Printf("Warning: scroll failed: %v", err)
 			}
 			time.Sleep(3 * time.Second)
@@ -174,6 +201,10 @@ func run(profile string, batchSize int, execPath string, downloadDir string) err
 		// Click Download
 		time.Sleep(1500 * time.Millisecond)
 		if err := download.ClickDownloadButton(ctx); err != nil {
+			if browser.IsBrowserClosed(err) {
+				log.Println("\n⚠️ Browser was closed. Exiting gracefully...")
+				break
+			}
 			log.Printf("Download error: %v", err)
 		} else {
 			log.Println("✓ Download started")
@@ -185,6 +216,10 @@ func run(profile string, batchSize int, execPath string, downloadDir string) err
 		// Deselect
 		for retry := 0; retry < 3; retry++ {
 			if err := selection.Deselect(ctx); err != nil {
+				if browser.IsBrowserClosed(err) {
+					log.Println("\n⚠️ Browser was closed. Exiting gracefully...")
+					break
+				}
 				log.Printf("Error deselecting (attempt %d): %v", retry+1, err)
 			}
 			time.Sleep(1 * time.Second)
@@ -194,10 +229,20 @@ func run(profile string, batchSize int, execPath string, downloadDir string) err
 			}
 			log.Printf("⚠️ Selection still active, trying again...")
 		}
+
+		// Check again if browser is still open before continuing
+		if browser.IsContextCanceled(ctx) {
+			log.Println("\n⚠️ Browser was closed. Exiting gracefully...")
+			break
+		}
 		log.Println("✓ Deselected")
 
 		// IMPORTANT: Scroll to move processed date off screen
 		if err := navigation.ScrollToPosition(ctx, dateInfo.YPosition); err != nil {
+			if browser.IsBrowserClosed(err) {
+				log.Println("\n⚠️ Browser was closed. Exiting gracefully...")
+				break
+			}
 			log.Printf("Warning: scroll to position failed: %v", err)
 		}
 		time.Sleep(1 * time.Second)
