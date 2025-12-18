@@ -1,0 +1,204 @@
+# GitHub Actions Release Pipeline for yandex-disk-photo-exporter
+# Triggered on version tags (v*)
+# Builds binaries for Linux (amd64/arm64), Windows (amd64), and macOS (amd64/arm64)
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+env:
+  GO_VERSION: '1.25'
+
+jobs:
+  # ===========================================================================
+  # Linux Builds
+  # ===========================================================================
+  build-linux:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            arch: amd64
+          - os: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Build binary
+        run: |
+          mkdir -p bin
+          go build -ldflags="-X main.appVersion=${{ steps.version.outputs.VERSION }}" \
+            -o bin/yandex-disk-photo-exporter_${{ steps.version.outputs.VERSION }}_linux_${{ matrix.arch }} \
+            .
+
+      - name: Install nfpm
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+
+      - name: Create nfpm config
+        run: |
+          cat > nfpm-${{ matrix.arch }}.yaml <<EOF
+          name: yandex-disk-photo-exporter
+          arch: ${{ matrix.arch }}
+          platform: linux
+          version: ${{ steps.version.outputs.VERSION }}
+          maintainer: cantalupo555 <cantalupo@protonmail.com>
+          description: |
+            Automated tool for bulk downloading photos from Yandex Disk.
+            Uses browser automation (chromedp) to select and download photos by date.
+          vendor: cantalupo555
+          homepage: https://github.com/cantalupo555/yandex-disk-photo-exporter
+          license: MIT
+          contents:
+            - src: ./bin/yandex-disk-photo-exporter_${{ steps.version.outputs.VERSION }}_linux_${{ matrix.arch }}
+              dst: /usr/bin/yandex-disk-photo-exporter
+              file_info:
+                mode: 0755
+            - src: ./README.md
+              dst: /usr/share/doc/yandex-disk-photo-exporter/README.md
+              file_info:
+                mode: 0644
+          EOF
+
+      - name: Build .deb package
+        run: |
+          nfpm package -p deb -f nfpm-${{ matrix.arch }}.yaml
+          mv *.deb bin/yandex-disk-photo-exporter_${{ steps.version.outputs.VERSION }}_linux_${{ matrix.arch }}.deb
+
+      - name: Build .rpm package
+        run: |
+          nfpm package -p rpm -f nfpm-${{ matrix.arch }}.yaml
+          mv *.rpm bin/yandex-disk-photo-exporter_${{ steps.version.outputs.VERSION }}_linux_${{ matrix.arch }}.rpm
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries-linux-${{ matrix.arch }}
+          path: bin/*
+
+  # ===========================================================================
+  # Windows Build
+  # ===========================================================================
+  build-windows:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Build binary (cross-compile)
+        env:
+          CGO_ENABLED: "0"
+          GOOS: windows
+          GOARCH: amd64
+        run: |
+          mkdir -p bin
+          go build -ldflags="-X main.appVersion=${{ steps.version.outputs.VERSION }}" \
+            -o bin/yandex-disk-photo-exporter_${{ steps.version.outputs.VERSION }}_windows_amd64.exe \
+            .
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries-windows
+          path: bin/*
+
+  # ===========================================================================
+  # macOS Builds
+  # ===========================================================================
+  build-macos:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install zip
+        run: sudo apt-get update && sudo apt-get install -y zip
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Build binary (ARM64 - Apple Silicon)
+        env:
+          CGO_ENABLED: "0"
+          GOOS: darwin
+          GOARCH: arm64
+        run: |
+          mkdir -p bin
+          go build -ldflags="-X main.appVersion=${{ steps.version.outputs.VERSION }}" \
+            -o yandex-disk-photo-exporter \
+            .
+          zip bin/yandex-disk-photo-exporter_${{ steps.version.outputs.VERSION }}_macOS_arm64.zip yandex-disk-photo-exporter
+          rm yandex-disk-photo-exporter
+
+      - name: Build binary (AMD64 - Intel)
+        env:
+          CGO_ENABLED: "0"
+          GOOS: darwin
+          GOARCH: amd64
+        run: |
+          go build -ldflags="-X main.appVersion=${{ steps.version.outputs.VERSION }}" \
+            -o yandex-disk-photo-exporter \
+            .
+          zip bin/yandex-disk-photo-exporter_${{ steps.version.outputs.VERSION }}_macOS_amd64.zip yandex-disk-photo-exporter
+          rm yandex-disk-photo-exporter
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries-macos
+          path: bin/*
+
+  # ===========================================================================
+  # Create GitHub Release
+  # ===========================================================================
+  release:
+    needs: [build-linux, build-windows, build-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: bin
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -la bin/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: bin/*
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref, '-alpha') || contains(github.ref, '-beta') || contains(github.ref, '-rc') }}
