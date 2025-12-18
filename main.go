@@ -125,7 +125,17 @@ func run(profile string, batchSize int, execPath string, downloadDir string) err
 
 	log.Println("✓ User is logged in")
 
-	// 3. Main loop - process one date at a time
+	// 3. Apply filter to show only photos from unlimited storage
+	log.Println("Applying filter for unlimited storage photos...")
+	if err := navigation.FilterByUnlimitedStorage(ctx); err != nil {
+		log.Printf("⚠️ Warning: could not apply filter: %v", err)
+		log.Println("Continuing without filter - all photos will be processed")
+	}
+
+	// Wait for page to update after filter
+	time.Sleep(2 * time.Second)
+
+	// 4. Main loop - process one date at a time
 	totalProcessed := 0
 	emptyRounds := 0
 
