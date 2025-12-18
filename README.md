@@ -13,9 +13,51 @@ A Go-based automation tool to bulk download photos from Yandex Disk, organized b
 
 ## Prerequisites
 
-- **Go 1.25+** installed
-- **Chromium** or **Google Chrome** browser
+- **Chromium-based browser** (Chrome, Chromium, Edge, Vivaldi, Opera, or Brave)
 - Logged into your Yandex account in the browser
+
+> **Note:** Go 1.25+ is only required if building from source. Pre-built binaries are available in the [Releases](https://github.com/cantalupo555/yandex-disk-photo-exporter/releases) page.
+
+## Browser Compatibility
+
+This tool works with any **Chromium-based browser**. The application automatically detects installed browsers in the following priority order:
+
+| Priority | Browser | Notes |
+|----------|---------|-------|
+| 1st | **Google Chrome** | Recommended for best compatibility |
+| 2nd | **Chromium** | Open-source alternative |
+| 3rd | **Microsoft Edge** | Chromium-based (Windows/macOS/Linux) |
+| 4th | **Vivaldi** | Power-user browser |
+| 5th | **Opera** | Feature-rich browser |
+| 6th | **Brave** | Privacy-focused browser |
+
+### Auto-Detection
+
+The tool automatically finds your browser. No configuration needed in most cases:
+
+```bash
+# Just run - browser is auto-detected
+./yandex-disk-photo-exporter
+# Output: ✓ Auto-detected browser: /usr/bin/google-chrome
+```
+
+### Using a Specific Browser
+
+If you have multiple browsers or want to use a specific one:
+
+```bash
+# Use Brave on Linux
+./yandex-disk-photo-exporter -exec /usr/bin/brave-browser
+
+# Use Vivaldi on Windows
+./yandex-disk-photo-exporter -exec "C:\Users\YourUser\AppData\Local\Vivaldi\Application\vivaldi.exe"
+
+# Use Opera on macOS
+./yandex-disk-photo-exporter -exec "/Applications/Opera.app/Contents/MacOS/Opera"
+```
+
+> **Note:** Any Chromium-based browser should work. If your browser isn't auto-detected, use the `-exec` flag with the full path.
+
 
 ## Installation
 
@@ -64,10 +106,16 @@ go build -o yandex-disk-photo-exporter
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `-profile` | `~/snap/chromium/common/chromium` | Path to browser profile directory |
+| `-profile` | OS-specific* | Path to browser profile directory |
 | `-batch` | `10` | Number of dates to process per batch |
-| `-exec` | `chromium` | Browser executable path |
+| `-exec` | Auto-detect | Browser executable path (auto-detected if not specified) |
 | `-download` | `~/Downloads` | Directory to save downloaded files |
+| `-version` | - | Show version and exit |
+
+*Default profile paths by OS:
+- **Linux:** `~/snap/chromium/common/chromium` or `~/.config/chromium`
+- **macOS:** `~/Library/Application Support/yandex-exporter-profile`
+- **Windows:** `~\.yandex-exporter-profile`
 
 ## How It Works
 
