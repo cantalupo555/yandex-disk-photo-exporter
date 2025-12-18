@@ -93,9 +93,14 @@ jobs:
           path: bin/*
 
   # ===========================================================================
-  # Windows Build (cross-compile from Linux)
+  # Windows Builds (cross-compile from Linux)
   # ===========================================================================
   build-windows:
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+          - arch: arm64
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -114,17 +119,17 @@ jobs:
         env:
           CGO_ENABLED: "0"
           GOOS: windows
-          GOARCH: amd64
+          GOARCH: ${{ matrix.arch }}
         run: |
           mkdir -p bin
           go build -ldflags="-s -w -X main.appVersion=${{ steps.version.outputs.VERSION }}" \
-            -o bin/yandex-disk-photo-exporter_${{ steps.version.outputs.VERSION }}_windows_amd64.exe \
+            -o bin/yandex-disk-photo-exporter_${{ steps.version.outputs.VERSION }}_windows_${{ matrix.arch }}.exe \
             .
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: binaries-windows
+          name: binaries-windows-${{ matrix.arch }}
           path: bin/*
 
   # ===========================================================================
