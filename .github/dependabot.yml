@@ -15,7 +15,6 @@ updates:
     commit-message:
       prefix: "chore(deps)"
       prefix-development: "chore(dev-deps)"
-      include: "scope"
 
   # 2. Maintain GitHub Actions
   - package-ecosystem: "github-actions"
@@ -31,4 +30,3 @@ updates:
     # Use conventional commits for PR titles
     commit-message:
       prefix: "ci(deps)"
-      include: "scope"
