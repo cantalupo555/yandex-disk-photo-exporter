@@ -275,7 +275,7 @@ jobs:
           mv *.rpm bin/yandex-disk-photo-exporter_${{ steps.version.outputs.VERSION }}_linux_${{ matrix.arch }}.rpm
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: binaries-linux-${{ matrix.arch }}
           path: bin/*
@@ -315,7 +315,7 @@ jobs:
             .
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: binaries-windows-${{ matrix.arch }}
           path: bin/*
@@ -367,7 +367,7 @@ jobs:
           rm yandex-disk-photo-exporter
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: binaries-macos
           path: bin/*
