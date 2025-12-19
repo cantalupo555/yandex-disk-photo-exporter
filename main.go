@@ -11,6 +11,7 @@ import (
 
 	"github.com/cantalupo555/yandex-disk-photo-exporter/internal/auth"
 	"github.com/cantalupo555/yandex-disk-photo-exporter/internal/browser"
+	"github.com/cantalupo555/yandex-disk-photo-exporter/internal/datefilter"
 	"github.com/cantalupo555/yandex-disk-photo-exporter/internal/download"
 	"github.com/cantalupo555/yandex-disk-photo-exporter/internal/navigation"
 	"github.com/cantalupo555/yandex-disk-photo-exporter/internal/selection"
@@ -40,6 +41,8 @@ func main() {
 	batchSize := flag.Int("batch", 10, "Number of dates per batch")
 	execPath := flag.String("exec", "", "Browser executable (auto-detect if empty)")
 	downloadDir := flag.String("download", defaultDownload, "Directory to save downloads")
+	fromDate := flag.String("from", "", "Start date for filtering (format: YYYY-MM-DD)")
+	toDate := flag.String("to", "", "End date for filtering (format: YYYY-MM-DD)")
 	flag.Parse()
 
 	// Handle version flag
@@ -69,18 +72,27 @@ func main() {
 		log.Fatalf("Error creating download directory: %v", err)
 	}
 
+	// Parse date range filter
+	dateRange, err := datefilter.NewDateRange(*fromDate, *toDate)
+	if err != nil {
+		log.Fatalf("Error parsing date range: %v", err)
+	}
+
 	log.Println("=== Yandex Photo Downloader ===")
 	log.Printf("Executable: %s", browserExec)
 	log.Printf("Profile: %s", *profile)
 	log.Printf("Download: %s", downloadPath)
 	log.Printf("Batch: %d dates at a time", *batchSize)
+	if dateRange.Enabled {
+		log.Printf("Date range: %s", dateRange)
+	}
 
-	if err := run(*profile, *batchSize, browserExec, downloadPath); err != nil {
+	if err := run(*profile, *batchSize, browserExec, downloadPath, dateRange); err != nil {
 		log.Fatalf("Error: %v", err)
 	}
 }
 
-func run(profile string, batchSize int, execPath string, downloadDir string) error {
+func run(profile string, batchSize int, execPath string, downloadDir string, dateRange *datefilter.DateRange) error {
 	// Initialize browser
 	cfg := browser.DefaultConfig()
 	cfg.ExecPath = execPath
@@ -196,6 +208,35 @@ func run(profile string, batchSize int, execPath string, downloadDir string) err
 		}
 
 		emptyRounds = 0
+		log.Println("✓ Date found: " + dateInfo.Text)
+
+		// Check if date is within the specified range
+		if dateRange.Enabled {
+			inRange, err := dateRange.IsInRange(dateInfo.Text)
+			if err != nil {
+				log.Printf("⚠️ Could not parse date '%s': %v", dateInfo.Text, err)
+				// Continue processing anyway if date can't be parsed
+			} else if !inRange {
+				// Check if we're past the range (dates are in reverse chronological order)
+				if dateRange.IsBeforeRange(dateInfo.Text) {
+					log.Printf("📅 Date '%s' is before the specified range. Stopping.", dateInfo.Text)
+					// Deselect before stopping
+					selection.Deselect(ctx)
+					break
+				}
+				// Date is after range, skip it and scroll
+				log.Printf("📅 Date '%s' is after the specified range. Skipping...", dateInfo.Text)
+				selection.Deselect(ctx)
+				time.Sleep(500 * time.Millisecond)
+				if err := navigation.ScrollToPosition(ctx, dateInfo.YPosition); err != nil {
+					log.Printf("Warning: scroll failed: %v", err)
+				}
+				time.Sleep(1 * time.Second)
+				continue
+			}
+			log.Printf("✓ Date '%s' is within range", dateInfo.Text)
+		}
+
 		log.Println("✓ Date selected: " + dateInfo.Text)
 
 		// Click Download

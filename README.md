@@ -6,6 +6,7 @@ A Go-based automation tool to bulk download photos from Yandex Disk, organized b
 
 - 📸 Automatically downloads all photos from your Yandex Disk
 - 📅 Processes photos organized by date
+- 🗓️ **Filter by date range** - download only photos from a specific period
 - 🔄 Intelligent scrolling to avoid reprocessing
 - 🔐 Uses your existing browser profile (preserves login)
 - ⚙️ Configurable batch size and download directory
@@ -139,6 +140,22 @@ If you have multiple browsers or want to use a specific one:
   -batch 20
 ```
 
+### Download Photos from a Specific Date Range
+
+```bash
+# Download photos from 2023 only
+./yandex-disk-photo-exporter --from 2023-01-01 --to 2023-12-31
+
+# Download photos from a specific month
+./yandex-disk-photo-exporter --from 2024-06-01 --to 2024-06-30
+
+# Download photos from a start date until today
+./yandex-disk-photo-exporter --from 2024-01-01
+
+# Download photos up until a specific date
+./yandex-disk-photo-exporter --to 2023-12-31
+```
+
 ### Available Flags
 
 | Flag | Default | Description |
@@ -147,6 +164,8 @@ If you have multiple browsers or want to use a specific one:
 | `-batch` | `10` | Number of dates to process per batch |
 | `-exec` | Auto-detect | Browser executable path (auto-detected if not specified) |
 | `-download` | `~/Downloads` | Directory to save downloaded files |
+| `-from` | - | Start date for filtering (format: `YYYY-MM-DD`) |
+| `-to` | - | End date for filtering (format: `YYYY-MM-DD`) |
 | `-version` | - | Show version and exit |
 
 *Default profile paths by OS:
