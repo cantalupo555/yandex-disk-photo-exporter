@@ -3,6 +3,8 @@ package report
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -21,7 +23,9 @@ type Stats struct {
 	DatesProcessed   int
 	DownloadsStarted int
 	DownloadsFailed  int
-	SkippedDates     int // Dates skipped (out of range)
+	SkippedDates     int   // Dates skipped (out of range)
+	TotalSize        int64 // Total size of downloaded files in bytes
+	DownloadDir      string
 	Errors           []ErrorEntry
 }
 
@@ -62,9 +66,53 @@ func (s *Stats) IncrementSkippedDates() {
 	s.SkippedDates++
 }
 
-// Finish marks the end time of the execution.
+// Finish marks the end time of the execution and calculates final stats.
 func (s *Stats) Finish() {
 	s.EndTime = time.Now()
+	// Calculate total size of downloaded files
+	if s.DownloadDir != "" {
+		s.TotalSize = calculateDirSize(s.DownloadDir)
+	}
+}
+
+// SetDownloadDir sets the download directory for size calculation.
+func (s *Stats) SetDownloadDir(dir string) {
+	s.DownloadDir = dir
+}
+
+// calculateDirSize returns the total size of all files in a directory.
+func calculateDirSize(dir string) int64 {
+	var size int64
+	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil // Skip errors
+		}
+		if !info.IsDir() {
+			size += info.Size()
+		}
+		return nil
+	})
+	return size
+}
+
+// formatBytes formats bytes into human-readable format.
+func formatBytes(bytes int64) string {
+	const (
+		KB = 1024
+		MB = KB * 1024
+		GB = MB * 1024
+	)
+
+	switch {
+	case bytes >= GB:
+		return fmt.Sprintf("%.2f GB", float64(bytes)/GB)
+	case bytes >= MB:
+		return fmt.Sprintf("%.2f MB", float64(bytes)/MB)
+	case bytes >= KB:
+		return fmt.Sprintf("%.2f KB", float64(bytes)/KB)
+	default:
+		return fmt.Sprintf("%d bytes", bytes)
+	}
 }
 
 // Duration returns the total execution duration.
@@ -117,6 +165,11 @@ func (s *Stats) Print() {
 		downloadStr += fmt.Sprintf(", %d failed", s.DownloadsFailed)
 	}
 	fmt.Printf("║  ⬇️  Downloads:         %-28s║\n", downloadStr)
+	
+	// Total size
+	if s.TotalSize > 0 {
+		fmt.Printf("║  💾 Total size:         %-28s║\n", formatBytes(s.TotalSize))
+	}
 	
 	// Skipped dates (if any)
 	if s.SkippedDates > 0 {
