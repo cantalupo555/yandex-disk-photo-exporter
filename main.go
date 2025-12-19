@@ -36,12 +36,13 @@ func main() {
 
 	// OS-aware defaults
 	defaultProfile := browser.DefaultProfilePath()
-	defaultDownload := filepath.Join(homeDir, "Downloads")
+	defaultDownload := filepath.Join(homeDir, "Downloads", "YandexDiskPhotosExporter")
 
 	profile := flag.String("profile", defaultProfile, "Path to browser profile")
 	batchSize := flag.Int("batch", 10, "Number of dates per batch")
 	execPath := flag.String("exec", "", "Browser executable (auto-detect if empty)")
 	downloadDir := flag.String("download", defaultDownload, "Directory to save downloads")
+	cleanDir := flag.Bool("clean", false, "Clean download directory before starting")
 	fromDate := flag.String("from", "", "Start date for filtering (format: YYYY-MM-DD)")
 	toDate := flag.String("to", "", "End date for filtering (format: YYYY-MM-DD)")
 	flag.Parse()
@@ -73,6 +74,20 @@ func main() {
 		log.Fatalf("Error creating download directory: %v", err)
 	}
 
+	// Clean download directory if requested
+	if *cleanDir {
+		if err := cleanDownloadDirectory(downloadPath); err != nil {
+			log.Fatalf("Error cleaning download directory: %v", err)
+		}
+		log.Printf("✓ Download directory cleaned: %s", downloadPath)
+	} else {
+		// Warn if directory is not empty
+		files, _ := os.ReadDir(downloadPath)
+		if len(files) > 0 {
+			log.Printf("⚠️  Download directory contains %d existing files. Use --clean flag to remove them first.", len(files))
+		}
+	}
+
 	// Parse date range filter
 	dateRange, err := datefilter.NewDateRange(*fromDate, *toDate)
 	if err != nil {
@@ -93,10 +108,27 @@ func main() {
 	}
 }
 
+// cleanDownloadDirectory removes all files from the download directory.
+func cleanDownloadDirectory(dir string) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		path := filepath.Join(dir, entry.Name())
+		if err := os.RemoveAll(path); err != nil {
+			return fmt.Errorf("failed to remove %s: %w", entry.Name(), err)
+		}
+	}
+
+	return nil
+}
+
 func run(profile string, batchSize int, execPath string, downloadDir string, dateRange *datefilter.DateRange) error {
 	// Initialize stats for final report
 	stats := report.New()
-	defer stats.Print()
+	stats.SetDownloadDir(downloadDir)
 
 	// Initialize browser
 	cfg := browser.DefaultConfig()
@@ -301,7 +333,10 @@ func run(profile string, batchSize int, execPath string, downloadDir string, dat
 		stats.IncrementDatesProcessed()
 	}
 
-	log.Println("\nProcessing complete. Browser remains open. Press Ctrl+C to exit.")
+	// Print final report
+	stats.Print()
+
+	log.Println("Browser remains open. Press Ctrl+C to exit.")
 
 	select {}
 }
