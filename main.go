@@ -14,6 +14,7 @@ import (
 	"github.com/cantalupo555/yandex-disk-photo-exporter/internal/datefilter"
 	"github.com/cantalupo555/yandex-disk-photo-exporter/internal/download"
 	"github.com/cantalupo555/yandex-disk-photo-exporter/internal/navigation"
+	"github.com/cantalupo555/yandex-disk-photo-exporter/internal/report"
 	"github.com/cantalupo555/yandex-disk-photo-exporter/internal/selection"
 )
 
@@ -93,6 +94,10 @@ func main() {
 }
 
 func run(profile string, batchSize int, execPath string, downloadDir string, dateRange *datefilter.DateRange) error {
+	// Initialize stats for final report
+	stats := report.New()
+	defer stats.Print()
+
 	// Initialize browser
 	cfg := browser.DefaultConfig()
 	cfg.ExecPath = execPath
@@ -148,10 +153,10 @@ func run(profile string, batchSize int, execPath string, downloadDir string, dat
 	time.Sleep(2 * time.Second)
 
 	// 4. Main loop - process one date at a time
-	totalProcessed := 0
 	emptyRounds := 0
 	consecutiveErrors := 0
 	const maxConsecutiveErrors = 3
+	var currentDateInfo string // Track current date for error reporting
 
 	for {
 		// Check if browser/context is still valid
@@ -160,7 +165,7 @@ func run(profile string, batchSize int, execPath string, downloadDir string, dat
 			break
 		}
 
-		log.Printf("\n--- Processing date %d ---", totalProcessed+1)
+		log.Printf("\n--- Processing date %d ---", stats.DatesProcessed+1)
 
 		// Check for pending selection and clear it
 		selection.ClearPendingSelection(ctx)
@@ -208,6 +213,7 @@ func run(profile string, batchSize int, execPath string, downloadDir string, dat
 		}
 
 		emptyRounds = 0
+		currentDateInfo = dateInfo.Text
 		log.Println("✓ Date found: " + dateInfo.Text)
 
 		// Check if date is within the specified range
@@ -226,6 +232,7 @@ func run(profile string, batchSize int, execPath string, downloadDir string, dat
 				}
 				// Date is after range, skip it and scroll
 				log.Printf("📅 Date '%s' is after the specified range. Skipping...", dateInfo.Text)
+				stats.IncrementSkippedDates()
 				selection.Deselect(ctx)
 				time.Sleep(500 * time.Millisecond)
 				if err := navigation.ScrollToPosition(ctx, dateInfo.YPosition); err != nil {
@@ -247,8 +254,11 @@ func run(profile string, batchSize int, execPath string, downloadDir string, dat
 				break
 			}
 			log.Printf("Download error: %v", err)
+			stats.IncrementDownloadsFailed()
+			stats.AddError(currentDateInfo, fmt.Sprintf("Download failed: %v", err))
 		} else {
 			log.Println("✓ Download started")
+			stats.IncrementDownloadsStarted()
 		}
 
 		// Wait for download to start
@@ -288,13 +298,10 @@ func run(profile string, batchSize int, execPath string, downloadDir string, dat
 		}
 		time.Sleep(1 * time.Second)
 
-		totalProcessed++
+		stats.IncrementDatesProcessed()
 	}
 
-	log.Println("\n==================================================")
-	log.Printf("✓ COMPLETED! %d dates processed", totalProcessed)
-	log.Println("==================================================")
-	log.Println("\nBrowser remains open. Press Ctrl+C to exit.")
+	log.Println("\nProcessing complete. Browser remains open. Press Ctrl+C to exit.")
 
 	select {}
 }
