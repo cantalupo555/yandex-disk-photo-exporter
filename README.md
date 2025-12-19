@@ -1,5 +1,12 @@
 # Yandex Disk Photo Exporter
 
+[![Release Status](https://github.com/cantalupo555/yandex-disk-photo-exporter/actions/workflows/release.yml/badge.svg)](https://github.com/cantalupo555/yandex-disk-photo-exporter/actions/workflows/release.yml)
+[![Latest Release](https://img.shields.io/github/v/release/cantalupo555/yandex-disk-photo-exporter)](https://github.com/cantalupo555/yandex-disk-photo-exporter/releases)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/cantalupo555/yandex-disk-photo-exporter)](https://github.com/cantalupo555/yandex-disk-photo-exporter/blob/master/go.mod)
+[![Go Report Card](https://goreportcard.com/badge/github.com/cantalupo555/yandex-disk-photo-exporter)](https://goreportcard.com/report/github.com/cantalupo555/yandex-disk-photo-exporter)
+[![Downloads](https://img.shields.io/github/downloads/cantalupo555/yandex-disk-photo-exporter/total)](https://github.com/cantalupo555/yandex-disk-photo-exporter/releases)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A Go-based automation tool to bulk download photos from Yandex Disk, organized by date.
 
 ## Features
