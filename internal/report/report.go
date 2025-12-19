@@ -141,82 +141,203 @@ func formatDuration(d time.Duration) string {
 	return fmt.Sprintf("%ds", s)
 }
 
-// Print outputs the final report to the console.
+// ANSI color codes
+const (
+	colorReset  = "\033[0m"
+	colorGreen  = "\033[32m"
+	colorYellow = "\033[33m"
+	colorRed    = "\033[31m"
+	colorCyan   = "\033[36m"
+	colorBold   = "\033[1m"
+	colorDim    = "\033[2m"
+)
+
+// Print outputs the final report to the console with colors.
 func (s *Stats) Print() {
 	s.Finish()
 
-	width := 54
-	line := strings.Repeat("═", width-2)
+	// Box width (internal content width, excluding borders)
+	contentWidth := 52
 	
 	fmt.Println()
-	fmt.Printf("╔%s╗\n", line)
-	fmt.Printf("║%s║\n", centerText("📊 FINAL REPORT", width-2))
-	fmt.Printf("╠%s╣\n", line)
+	printBoxTop(contentWidth)
+	printBoxTitle("📊 FINAL REPORT", contentWidth)
+	printBoxSeparator(contentWidth)
 	
 	// Duration
-	fmt.Printf("║  ⏱️  Duration:         %-28s║\n", formatDuration(s.Duration()))
+	printDataRow("⏱️ ", "Duration", formatDuration(s.Duration()), contentWidth, "")
 	
 	// Dates processed
-	fmt.Printf("║  📅 Dates processed:   %-28d║\n", s.DatesProcessed)
+	printDataRow("📅", "Dates processed", fmt.Sprintf("%d", s.DatesProcessed), contentWidth, "")
 	
 	// Downloads
-	downloadStr := fmt.Sprintf("%d started", s.DownloadsStarted)
+	downloadValue := fmt.Sprintf("%d started", s.DownloadsStarted)
+	downloadColor := colorGreen
 	if s.DownloadsFailed > 0 {
-		downloadStr += fmt.Sprintf(", %d failed", s.DownloadsFailed)
+		downloadValue += fmt.Sprintf(", %d failed", s.DownloadsFailed)
+		downloadColor = colorYellow
 	}
-	fmt.Printf("║  ⬇️  Downloads:         %-28s║\n", downloadStr)
+	printDataRow("⬇️ ", "Downloads", downloadValue, contentWidth, downloadColor)
 	
 	// Total size
 	if s.TotalSize > 0 {
-		fmt.Printf("║  💾 Total size:         %-28s║\n", formatBytes(s.TotalSize))
+		printDataRow("💾", "Total size", formatBytes(s.TotalSize), contentWidth, "")
 	}
 	
 	// Skipped dates (if any)
 	if s.SkippedDates > 0 {
-		fmt.Printf("║  ⏭️  Skipped:           %-28s║\n", fmt.Sprintf("%d (out of date range)", s.SkippedDates))
+		skippedValue := fmt.Sprintf("%d (out of date range)", s.SkippedDates)
+		printDataRow("⏭️ ", "Skipped", skippedValue, contentWidth, colorYellow)
 	}
 	
 	// Errors section
+	printBoxSeparator(contentWidth)
 	if len(s.Errors) > 0 {
-		fmt.Printf("╠%s╣\n", line)
-		fmt.Printf("║  ❌ Errors (%d):%-36s║\n", len(s.Errors), "")
+		errTitle := fmt.Sprintf("Errors (%d):", len(s.Errors))
+		printDataRow("❌", errTitle, "", contentWidth, colorRed)
 		
 		// Show up to 5 errors
 		maxErrors := 5
 		for i, err := range s.Errors {
 			if i >= maxErrors {
 				remaining := len(s.Errors) - maxErrors
-				fmt.Printf("║     ... and %d more errors%-24s║\n", remaining, "")
+				printErrorLine(fmt.Sprintf("... and %d more errors", remaining), contentWidth)
 				break
 			}
 			errText := fmt.Sprintf("- %s", err.Message)
 			if err.DateInfo != "" {
 				errText += fmt.Sprintf(" (%s)", err.DateInfo)
 			}
-			// Truncate if too long
-			if len(errText) > width-8 {
-				errText = errText[:width-11] + "..."
-			}
-			fmt.Printf("║     %-48s║\n", errText)
+			printErrorLine(errText, contentWidth)
 		}
 	} else {
-		fmt.Printf("╠%s╣\n", line)
-		fmt.Printf("║  ✅ No errors occurred%-30s║\n", "")
+		printDataRow("✅", "No errors occurred", "", contentWidth, colorGreen)
 	}
 	
-	fmt.Printf("╚%s╝\n", line)
+	printBoxBottom(contentWidth)
 	fmt.Println()
 }
 
-// centerText centers a string within a given width.
-func centerText(s string, width int) string {
-	// Account for emoji width (some take 2 characters visually)
-	visualLen := len(s)
-	padding := (width - visualLen) / 2
-	if padding < 0 {
-		padding = 0
+// printBoxTop prints the top border.
+func printBoxTop(width int) {
+	fmt.Printf("%s%s%s\n", colorCyan, strings.Repeat("=", width), colorReset)
+}
+
+// printBoxBottom prints the bottom border.
+func printBoxBottom(width int) {
+	fmt.Printf("%s%s%s\n", colorCyan, strings.Repeat("=", width), colorReset)
+}
+
+// printBoxSeparator prints a horizontal separator line.
+func printBoxSeparator(width int) {
+	fmt.Printf("%s%s%s\n", colorCyan, strings.Repeat("-", width), colorReset)
+}
+
+// printBoxTitle prints a centered title.
+func printBoxTitle(title string, width int) {
+	visLen := measureString(title)
+	padding := (width - visLen) / 2
+	if padding < 0 { padding = 0 }
+	
+	fmt.Printf("%s%s%s%s%s\n", 
+		strings.Repeat(" ", padding),
+		colorBold, title, colorReset,
+		colorCyan) // Restore color for next lines if needed, though mostly reset
+}
+
+// printDataRow prints a data row with emoji, label, and value.
+func printDataRow(emoji, label, value string, width int, valueColor string) {
+	// Layout: "  [emoji] [label] [SPACER] [value]"
+	// IDent: 2 spaces
+	indent := "  "
+	
+	colGap := "   " // Space between label and value
+	
+	labelFixedVisWidth := 22
+	
+	// Prepare Label
+	fullLabel := label
+	if emoji != "" {
+		fullLabel = emoji + "  " + label // Extra space after emoji for aesthetics
 	}
-	return fmt.Sprintf("%*s%s%*s", padding, "", s, width-padding-visualLen, "")
+	
+	labelVis := measureString(fullLabel)
+	labelPadding := labelFixedVisWidth - labelVis
+	if labelPadding < 0 { labelPadding = 0 }
+	
+	labelField := fullLabel + strings.Repeat(" ", labelPadding)
+
+	valueField := value
+	if valueColor != "" {
+		valueField = valueColor + value + colorReset
+	}
+
+	fmt.Printf("%s%s%s%s%s%s\n", 
+		colorCyan, // Base color (though mostly reset inside)
+		indent,
+		colorReset + labelField,
+		colGap,
+		valueField,
+		colorReset)
+}
+
+// printErrorLine prints an error detail line.
+func printErrorLine(text string, width int) {
+	// Layout: "      [text]"
+	indent := "      " // Indent to align with text start of data rows
+	
+	fmt.Printf("%s%s%s%s\n",
+		colorCyan, 
+		indent,
+		colorRed + text + colorReset,
+		colorReset)
+}
+
+// measureString returns visual length of string without ANSI codes
+func measureString(s string) int {
+	return visualLength(stripAnsiCodes(s))
+}
+
+// visualLength calculates visual width of string handling emojis
+func visualLength(s string) int {
+	width := 0
+	for _, r := range s {
+		// Variation Selector-16 (VS16) to force emoji style: \uFE0F
+		// Some chars are zero width
+		if r == '\ufe0f' {
+			continue
+		}
+		
+		// Simple heuristic for East Asian Width / Emojis
+		// Most emojis and CJK characters are 2 width
+		// ASCII and simple unicode are 1
+		if r > 256 {
+			width += 2
+		} else {
+			width += 1
+		}
+	}
+	return width
+}
+
+// stripAnsiCodes removes ANSI escape codes from a string.
+func stripAnsiCodes(s string) string {
+	result := ""
+	inEscape := false
+	for _, r := range s {
+		if r == '\033' {
+			inEscape = true
+			continue
+		}
+		if inEscape {
+			if r == 'm' {
+				inEscape = false
+			}
+			continue
+		}
+		result += string(r)
+	}
+	return result
 }
 
 // Summary returns a brief one-line summary of the stats.
