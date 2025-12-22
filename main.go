@@ -29,14 +29,10 @@ func main() {
 	// Version flag
 	showVersion := flag.Bool("version", false, "Show version and exit")
 
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		log.Fatalf("Error getting home directory: %v", err)
-	}
-
 	// OS-aware defaults
 	defaultProfile := browser.DefaultProfilePath()
-	defaultDownload := filepath.Join(homeDir, "Downloads", "YandexDiskPhotosExporter")
+	// Use current working directory for downloads (more portable across OS)
+	defaultDownload := "./YandexDiskPhotosExporter"
 
 	profile := flag.String("profile", defaultProfile, "Path to browser profile")
 	batchSize := flag.Int("batch", 10, "Number of dates per batch")
@@ -66,6 +62,10 @@ func main() {
 	// Expand ~ in download path
 	downloadPath := *downloadDir
 	if strings.HasPrefix(downloadPath, "~/") {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			log.Fatalf("Error getting home directory: %v", err)
+		}
 		downloadPath = filepath.Join(homeDir, downloadPath[2:])
 	}
 
